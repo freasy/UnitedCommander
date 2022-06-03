@@ -1,8 +1,10 @@
 #include <Arduino.h>
 #include <CrsfSerial.h>
 #include <median.h>
+#include <Servo.h>
 #include "target.h"
-#include <pinDefinitions.h>
+#include "pins_arduino.h"
+#include <PicoLed.hpp>
 
 #include "config.h"
 
@@ -24,7 +26,7 @@ constexpr int OUTPUT_FAILSAFE[NUM_OUTPUTS] = {
 
 // Define the pins used to output servo PWM, must use hardware PWM,
 // and change HardwareTimer targets below if the timers change
-constexpr PinName OUTPUT_PINS[NUM_OUTPUTS] = { OUTPUT_PIN_MAP };
+constexpr int OUTPUT_PINS[NUM_OUTPUTS] = { OUTPUT_PIN_MAP };
 
 #if !defined(PWM_FREQ_HZ)
     #define PWM_FREQ_HZ     50
@@ -34,8 +36,8 @@ constexpr PinName OUTPUT_PINS[NUM_OUTPUTS] = { OUTPUT_PIN_MAP };
 // Scale used to calibrate or change to CRSF standard 0.1 scale
 #define VBAT_SCALE      1.0
 
-UART Serial2(UART_INPUT_TX, UART_INPUT_RX, 0, 0);
-static CrsfSerial crsf(Serial2);
+SerialUART serial2(uart0, UART_INPUT_TX, UART_INPUT_RX, 0, 0);
+static CrsfSerial crsf(serial2);
 
 static int g_OutputsUs[NUM_OUTPUTS];
 static struct tagConnectionState {
@@ -46,7 +48,10 @@ static struct tagConnectionState {
     char serialInBuff[64];
     uint8_t serialInBuffLen;
     bool serialEcho;
+    Servo* pwm[12];
 } g_State;
+
+auto led = PicoLed::addLeds<PicoLed::WS2812B>(pio0, 0, DPIN_LED, 4, PicoLed::FORMAT_GRB);
 
 static void crsfShiftyByte(uint8_t b)
 {
@@ -63,8 +68,16 @@ static void servoSetUs(unsigned int servo, int usec)
   pin = OUTPUT_PINS[servo];
   val = map(usec, CRSF_CHANNEL_VALUE_MID, CRSF_CHANNEL_VALUE_MAX, 0, maxRes);
   float percent = (float)val/(float)((1 << write_resolution)-1);
-  mbed::PwmOut* pwm = digitalPinToPwm(pin);
-  if (pwm == NULL) {
+
+  if (g_State.pwm[pin] == NULL) {
+      Servo pwm;
+      
+      g_State.pwm[pin] = &pwm;
+      g_State.pwm[pin]->attach(pin, CRSF_CHANNEL_VALUE_MIN, CRSF_CHANNEL_VALUE_MAX, OUTPUT_FAILSAFE[pin]);
+  }
+  
+  //mbed::PwmOut* pwm = digitalPinToPwm(pin);
+  /*if (pwm == NULL) {
       pwm = new mbed::PwmOut(digitalPinToPinName(pin));
       digitalPinToPwm(pin) = pwm;
       #if defined(PWM_FREQ_HZ)
@@ -72,12 +85,13 @@ static void servoSetUs(unsigned int servo, int usec)
       #else
           pwm->period_ms(2); //500Hz // TODO: apply PWM_FREQ_HZ
       #endif
-  }
+  }*/
   if (percent >= 0) {
-      pwm->write(percent);
+      g_State.pwm[pin]->write(percent);
   } else {
-      delete pwm;
-      digitalPinToPwm(pin) = NULL;
+      g_State.pwm[pin]->detach();
+      delete g_State.pwm[pin];
+      g_State.pwm[pin] = NULL;
   }
   g_OutputsUs[servo] = usec;
 }
@@ -118,22 +132,26 @@ static void packetLinkStatistics(crsfLinkStatistics_t *link)
 
 static void crsfLinkUp()
 {
-    digitalWrite(DPIN_LED, HIGH ^ LED_INVERTED);
+    led.setPixelColor(1, PicoLed::RGB(0, 255, 0));
+    
+    //digitalWrite(DPIN_LED, HIGH ^ LED_INVERTED);
 }
 
 static void crsfLinkDown()
 {
-  digitalWrite(DPIN_LED, LOW ^ LED_INVERTED);
+    led.setPixelColor(1, PicoLed::RGB(255, 255, 0));
+    
+    // digitalWrite(DPIN_LED, LOW ^ LED_INVERTED);
 
-  // Perform the failsafe action
-  for (unsigned int out=0; out<NUM_OUTPUTS; ++out)
-  {
-    if (OUTPUT_FAILSAFE[out] == fsaNoPulses)
-        servoSetUs(out, 0);
-    else if (OUTPUT_FAILSAFE[out] != fsaHold)
-        servoSetUs(out, OUTPUT_FAILSAFE[out]);
-    // else fsaHold does nothing, keep the same value
-  }
+    // Perform the failsafe action
+    for (unsigned int out=0; out<NUM_OUTPUTS; ++out)
+    {
+        if (OUTPUT_FAILSAFE[out] == fsaNoPulses)
+            servoSetUs(out, 0);
+        else if (OUTPUT_FAILSAFE[out] != fsaHold)
+            servoSetUs(out, OUTPUT_FAILSAFE[out]);
+        // else fsaHold does nothing, keep the same value
+    }
 }
 
 static void checkVbatt()
@@ -239,6 +257,8 @@ static void checkSerialInNormal()
 {
     while (Serial.available())
     {
+        led.setPixelColor(1, PicoLed::RGB(0, 0, 255));
+
         char c = Serial.read();
         if (g_State.serialEcho && c != '\n')
             Serial.write(c);
@@ -284,8 +304,8 @@ static void setupCrsf()
 
 static void setupGpio()
 {
-    pinMode(DPIN_LED, OUTPUT);
-    digitalWrite(DPIN_LED, LOW ^ LED_INVERTED);
+    //pinMode(DPIN_LED, OUTPUT);
+    //digitalWrite(DPIN_LED, LOW ^ LED_INVERTED);
     analogReadResolution(12);
 
     // The servo outputs are initialized when the
@@ -294,8 +314,23 @@ static void setupGpio()
     // on startup
 }
 
+void defaultLed() {
+    led.clear();
+
+    led.setPixelColor(0, PicoLed::RGB(255,255,0));
+    led.setPixelColor(1, PicoLed::RGB(255,0,0));
+    led.setPixelColor(2, PicoLed::RGB(0,0,0));
+    led.setPixelColor(3, PicoLed::RGB(0,0,0));
+}
+
 void setup() {
     Serial.begin(115200);
+
+    led.setDrawMode(PicoLed::DrawMode::MODE_SET);
+
+    defaultLed();
+
+    led.show();
 
     setupGpio();
     setupCrsf();
@@ -303,6 +338,9 @@ void setup() {
 
 void loop() {
     crsf.loop();
+
     checkVbatt();
     checkSerialIn();
+
+    led.show();
 }

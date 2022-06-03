@@ -1,5 +1,6 @@
 {
     "files.associations": {
+        "*.h": "cpp",
         "array": "cpp",
         "atomic": "cpp",
         "bit": "cpp",
@@ -57,6 +58,10 @@
         "streambuf": "cpp",
         "thread": "cpp",
         "cinttypes": "cpp",
-        "typeinfo": "cpp"
-    }
+        "typeinfo": "cpp",
+        "compare": "cpp",
+        "concepts": "cpp",
+        "ranges": "cpp"
+    },
+    "C_Cpp.errorSquiggles": "Disabled"
 }

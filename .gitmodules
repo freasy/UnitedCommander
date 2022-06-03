@@ -1,6 +1,0 @@
-[submodule "arduino-core"]
-	path = lib/arduino-core
-	url = https://github.com/arduino/ArduinoCore-mbed
-[submodule "PicoLed"]
-	path = lib/PicoLed
-	url = https://github.com/ForsakenNGS/PicoLED

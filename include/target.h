@@ -1,11 +1,11 @@
 #pragma once
 
-#define DPIN_LED        LED_BUILTIN
+#define DPIN_LED        D27
 #define LED_INVERTED    0
-#define APIN_VBAT       p28
-#define UART_INPUT_TX   8
-#define UART_INPUT_RX   9
-#define OUTPUT_PIN_MAP  p10, p11, p12, p13,  p18, p19, p20, p21
+#define APIN_VBAT       D26
+#define UART_INPUT_TX   D16
+#define UART_INPUT_RX   D17
+#define OUTPUT_PIN_MAP  D0, D1, D2, D3, D4, D5, D6, D7, D8, D9, D10, D11
 
 #if !defined(LED_INVERTED)
     #define LED_INVERTED    0
@@ -13,6 +13,6 @@
 
 #if !defined(VBAT_R1) || !defined(VBAT_R2)
     // Resistor divider used on VBAT input, R1+R2 must be less than 3178
-    #define VBAT_R1         820
-    #define VBAT_R2         120
+    #define VBAT_R1         900
+    #define VBAT_R2         100
 #endif

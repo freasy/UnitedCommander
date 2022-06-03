@@ -20,7 +20,7 @@ class config {
 public:
     uc_config getConfig() {
         uc_config l_config;
-        memcpy(l_config.mapping, (void*)m_channel_mapping, 4 * sizeof(char));
+        memcpy((void*)&l_config.mapping, (void*)&m_channel_mapping, 4 * sizeof(char));
         l_config.rxType = m_rx_type;
         return l_config;
     }
